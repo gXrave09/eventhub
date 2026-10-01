@@ -478,117 +478,21 @@
       display: block;
     }
 
+    /* Cosmic Starfield Background */
+    #star-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+      display: block;
+    }
+
     .login-topbar,
     .auth-main-layout {
       position: relative;
       z-index: 1;
-    }
-
-    /* Interactive Spark Badge Button */
-    .spark-btn-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 16px;
-      border-radius: var(--md-sys-shape-corner-full);
-      background: rgba(124, 58, 237, 0.12);
-      border: 1px solid rgba(168, 85, 247, 0.35);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      color: #e9d5ff;
-      font-size: 0.78rem;
-      font-weight: 700;
-      letter-spacing: 0.03em;
-      cursor: pointer;
-      width: fit-content;
-      margin-bottom: 20px;
-      user-select: none;
-      box-shadow: 0 0 16px rgba(124, 58, 237, 0.2), inset 0 0 12px rgba(168, 85, 247, 0.1);
-      transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
-                  border-color 0.22s ease,
-                  box-shadow 0.22s ease,
-                  background 0.22s ease;
-      position: relative;
-      overflow: visible;
-    }
-
-    .spark-btn-badge:hover {
-      transform: scale(1.03);
-      background: rgba(124, 58, 237, 0.22);
-      border-color: rgba(192, 132, 252, 0.7);
-      box-shadow: 0 0 24px rgba(168, 85, 247, 0.45), inset 0 0 16px rgba(192, 132, 252, 0.2);
-      color: #ffffff;
-    }
-
-    .spark-btn-badge:active {
-      transform: scale(0.97);
-    }
-
-    .spark-btn-badge .spark-icon {
-      font-size: 0.85rem;
-      color: #c084fc;
-      display: inline-block;
-      animation: pulseStar 2s ease-in-out infinite alternate;
-    }
-
-    @keyframes pulseStar {
-      0% { transform: scale(0.9) rotate(0deg); opacity: 0.8; filter: drop-shadow(0 0 2px #c084fc); }
-      100% { transform: scale(1.15) rotate(15deg); opacity: 1; filter: drop-shadow(0 0 8px #00f2fe); }
-    }
-
-    /* Flying Light Particle Burst Layer */
-    .spark-particle {
-      position: fixed;
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      pointer-events: none;
-      z-index: 9998;
-      top: 0;
-      left: 0;
-      will-change: transform, opacity;
-      animation: explodeParticle 850ms cubic-bezier(0.12, 0.8, 0.32, 1) forwards;
-    }
-
-    @keyframes explodeParticle {
-      0% {
-        transform: translate3d(var(--x), var(--y), 0) scale(1.4);
-        opacity: 1;
-      }
-      60% {
-        opacity: 0.9;
-      }
-      100% {
-        transform: translate3d(calc(var(--x) + var(--tx)), calc(var(--y) + var(--ty)), 0) scale(0);
-        opacity: 0;
-      }
-    }
-
-    /* Expanding Radial Shockwave Ring */
-    .spark-shockwave {
-      position: fixed;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      pointer-events: none;
-      z-index: 9997;
-      top: 0;
-      left: 0;
-      border: 2px solid rgba(192, 132, 252, 0.85);
-      box-shadow: 0 0 20px rgba(0, 242, 254, 0.6), inset 0 0 14px rgba(255, 42, 133, 0.4);
-      transform: translate3d(calc(var(--x) - 14px), calc(var(--y) - 14px), 0) scale(1);
-      animation: shockwaveExpand 650ms cubic-bezier(0.12, 0.8, 0.32, 1) forwards;
-    }
-
-    @keyframes shockwaveExpand {
-      0% {
-        transform: translate3d(calc(var(--x) - 14px), calc(var(--y) - 14px), 0) scale(1);
-        opacity: 1;
-      }
-      100% {
-        transform: translate3d(calc(var(--x) - 14px), calc(var(--y) - 14px), 0) scale(12);
-        opacity: 0;
-      }
     }
   </style>
 </head>
@@ -624,12 +528,9 @@
       <div></div>
 
       <div class="panel-body">
-        <!-- Interactive Spark Button (Badged without shifting layout) -->
-        <button type="button" class="spark-btn-badge" id="btn-cosmic-spark" title="Click to trigger cosmic burst">
-          <span class="spark-icon">✦</span>
-          <span>Spark | Your next adventure awaits</span>
-        </button>
-
+        <div class="m3-badge-pill">
+          <i data-lucide="sparkles" style="width:13px;height:13px;"></i> Material Design 3 Expressive
+        </div>
         <h1 class="panel-headline">Your campus events,<br/><span class="grad-text">seamlessly delivered.</span></h1>
         <p class="panel-sub">Trusted by college organizing committees to streamline registrations, generate verified QR passes, and track check‑ins live with sub-second latency.</p>
         
@@ -855,72 +756,6 @@
 
       resizeCanvas();
       animId = requestAnimationFrame(render);
-
-      // Expose injection interface for button burst
-      window.injectCosmicSupernova = function(cx, cy) {
-        const count = Math.floor(Math.random() * 11) + 30; // 30–40 stars
-        for (let i = 0; i < count; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = Math.random() * 4.5 + 1.5;
-          const vx = Math.cos(angle) * speed;
-          const vy = Math.sin(angle) * speed;
-          stars.push(createStar(cx, cy, vx, vy, true));
-        }
-      };
-    })();
-
-    // DOM Particle Explosion Controller
-    (function initSparkParticleExplosion() {
-      const sparkBtn = document.getElementById('btn-cosmic-spark');
-      if (!sparkBtn) return;
-
-      const palette = ['#00f2fe', '#ff2a85', '#7928ca', '#ffb300', '#ffffff', '#c084fc'];
-
-      function triggerBurst(e) {
-        const clientX = e.clientX || (sparkBtn.getBoundingClientRect().left + sparkBtn.offsetWidth / 2);
-        const clientY = e.clientY || (sparkBtn.getBoundingClientRect().top + sparkBtn.offsetHeight / 2);
-
-        // 1. Expanding Shockwave Ring
-        const shockwave = document.createElement('div');
-        shockwave.className = 'spark-shockwave';
-        shockwave.style.setProperty('--x', `${clientX}px`);
-        shockwave.style.setProperty('--y', `${clientY}px`);
-        document.body.appendChild(shockwave);
-        setTimeout(() => shockwave.remove(), 700);
-
-        // 2. Spawn 28–32 DOM Flying Light Particles
-        const particleCount = Math.floor(Math.random() * 5) + 28;
-        for (let i = 0; i < particleCount; i++) {
-          const p = document.createElement('div');
-          p.className = 'spark-particle';
-
-          const angle = Math.random() * Math.PI * 2;
-          const dist = Math.random() * 160 + 60; // 60px to 220px
-          const tx = Math.cos(angle) * dist;
-          const ty = Math.sin(angle) * dist;
-          const color = palette[Math.floor(Math.random() * palette.length)];
-          const size = Math.random() * 4 + 4; // 4px to 8px
-
-          p.style.width = `${size}px`;
-          p.style.height = `${size}px`;
-          p.style.background = color;
-          p.style.boxShadow = `0 0 12px ${color}, 0 0 24px ${color}`;
-          p.style.setProperty('--x', `${clientX}px`);
-          p.style.setProperty('--y', `${clientY}px`);
-          p.style.setProperty('--tx', `${tx}px`);
-          p.style.setProperty('--ty', `${ty}px`);
-
-          document.body.appendChild(p);
-          setTimeout(() => p.remove(), 900);
-        }
-
-        // 3. Inject High-Speed Stars into Canvas Engine
-        if (typeof window.injectCosmicSupernova === 'function') {
-          window.injectCosmicSupernova(clientX, clientY);
-        }
-      }
-
-      sparkBtn.addEventListener('click', triggerBurst);
     })();
   </script>
 
