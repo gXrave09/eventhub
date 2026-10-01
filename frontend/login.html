@@ -192,7 +192,7 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.06em;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
       width: fit-content;
       border: 1px solid var(--md-sys-color-outline-variant);
     }
@@ -467,17 +467,6 @@
       .auth-card-wrapper { padding: 24px 16px; border-radius: var(--md-sys-shape-corner-large); }
       .auth-headline { font-size: 1.5rem; }
     }
-    /* Cosmic Starfield & Spark Particle Styles */
-    #star-canvas {
-      position: fixed;
-      inset: 0;
-      width: 100vw;
-      height: 100vh;
-      z-index: 0;
-      pointer-events: none;
-      display: block;
-    }
-
     /* Cosmic Starfield Background */
     #star-canvas {
       position: fixed;
@@ -493,6 +482,178 @@
     .auth-main-layout {
       position: relative;
       z-index: 1;
+    }
+
+    /* Glassmorphic Interactive Spark Badge Pill */
+    .spark-btn-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 18px;
+      border-radius: var(--md-sys-shape-corner-full);
+      background: rgba(18, 14, 28, 0.65);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      color: #e9d5ff;
+      font-family: var(--md-sys-typescale-plain-font);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      width: fit-content;
+      margin-bottom: 18px;
+      user-select: none;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), 0 0 16px rgba(124, 58, 237, 0.22), inset 0 0 12px rgba(168, 85, 247, 0.12);
+      transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                  border-color 0.22s ease,
+                  box-shadow 0.22s ease,
+                  background 0.22s ease;
+      position: relative;
+      overflow: visible;
+    }
+
+    .spark-btn-badge:hover {
+      transform: scale(1.03);
+      background: rgba(26, 18, 42, 0.85);
+      border-color: rgba(192, 132, 252, 0.8);
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4), 0 0 24px rgba(168, 85, 247, 0.5), inset 0 0 16px rgba(192, 132, 252, 0.25);
+      color: #ffffff;
+    }
+
+    .spark-btn-badge:active {
+      transform: scale(0.97);
+    }
+
+    .spark-btn-badge .spark-icon {
+      font-size: 0.85rem;
+      color: #c084fc;
+      display: inline-block;
+      animation: pulseStar 2s ease-in-out infinite alternate;
+    }
+
+    @keyframes pulseStar {
+      0% { transform: scale(0.9) rotate(0deg); opacity: 0.85; filter: drop-shadow(0 0 2px #c084fc); }
+      100% { transform: scale(1.15) rotate(15deg); opacity: 1; filter: drop-shadow(0 0 8px #00f2fe); }
+    }
+
+    /* Flying Light Particle Burst Layer */
+    .spark-particle {
+      position: fixed;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9998;
+      top: 0;
+      left: 0;
+      will-change: transform, opacity;
+      animation: explodeParticle 850ms cubic-bezier(0.12, 0.8, 0.32, 1) forwards;
+    }
+
+    @keyframes explodeParticle {
+      0% {
+        transform: translate3d(calc(var(--x) - 3.5px), calc(var(--y) - 3.5px), 0) scale(1.4);
+        opacity: 1;
+      }
+      60% {
+        opacity: 0.9;
+      }
+      100% {
+        transform: translate3d(calc(var(--x) - 3.5px + var(--tx)), calc(var(--y) - 3.5px + var(--ty)), 0) scale(0);
+        opacity: 0;
+      }
+    }
+
+    /* Expanding Radial Shockwave Ring */
+    .spark-shockwave {
+      position: fixed;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9997;
+      top: 0;
+      left: 0;
+      border: 2px solid rgba(192, 132, 252, 0.85);
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.6), inset 0 0 14px rgba(255, 42, 133, 0.4);
+      transform: translate3d(calc(var(--x) - 14px), calc(var(--y) - 14px), 0) scale(1);
+      animation: shockwaveExpand 650ms cubic-bezier(0.12, 0.8, 0.32, 1) forwards;
+    }
+
+    @keyframes shockwaveExpand {
+      0% {
+        transform: translate3d(calc(var(--x) - 14px), calc(var(--y) - 14px), 0) scale(1);
+        opacity: 1;
+      }
+      100% {
+        transform: translate3d(calc(var(--x) - 14px), calc(var(--y) - 14px), 0) scale(12);
+        opacity: 0;
+      }
+    }
+
+    /* Glassmorphic Cosmic Feedback Toast */
+    .cosmic-toast-container {
+      position: fixed;
+      bottom: 28px;
+      left: 32px;
+      z-index: 10000;
+      pointer-events: none;
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      max-width: calc(100vw - 48px);
+    }
+
+    @media (max-width: 640px) {
+      .cosmic-toast-container {
+        left: 50%;
+        transform: translateX(-50%);
+        justify-content: center;
+        width: max-content;
+        max-width: calc(100vw - 32px);
+      }
+    }
+
+    .cosmic-toast {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 22px;
+      border-radius: var(--md-sys-shape-corner-full);
+      background: rgba(18, 14, 28, 0.82);
+      border: 1px solid rgba(168, 85, 247, 0.5);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      color: #f3e8ff;
+      font-family: var(--md-sys-typescale-plain-font);
+      font-size: 0.875rem;
+      font-weight: 600;
+      letter-spacing: 0.015em;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55), 0 0 24px rgba(124, 58, 237, 0.4), inset 0 0 12px rgba(192, 132, 252, 0.2);
+      white-space: nowrap;
+      pointer-events: auto;
+      user-select: none;
+      animation: toastFadeInOut 3000ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes toastFadeInOut {
+      0% {
+        opacity: 0;
+        transform: translateY(18px) scale(0.94);
+      }
+      12% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      82% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.96);
+      }
     }
   </style>
 </head>
@@ -531,6 +692,13 @@
         <div class="m3-badge-pill">
           <i data-lucide="sparkles" style="width:13px;height:13px;"></i> Material Design 3 Expressive
         </div>
+
+        <!-- Interactive Spark Badge Pill -->
+        <button type="button" class="spark-btn-badge" id="btn-cosmic-spark" title="Click to trigger cosmic burst">
+          <span class="spark-icon">✦</span>
+          <span>Spark | Your next adventure awaits</span>
+        </button>
+
         <h1 class="panel-headline">Your campus events,<br/><span class="grad-text">seamlessly delivered.</span></h1>
         <p class="panel-sub">Trusted by college organizing committees to streamline registrations, generate verified QR passes, and track check‑ins live with sub-second latency.</p>
         
@@ -756,6 +924,98 @@
 
       resizeCanvas();
       animId = requestAnimationFrame(render);
+
+      // Expose injection interface for button burst (30-40 high-speed, bright stars radiating outward)
+      window.injectCosmicSupernova = function(cx, cy) {
+        const count = Math.floor(Math.random() * 11) + 30; // 30–40 stars
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 5.5 + 2.5; // High speed outward
+          const vx = Math.cos(angle) * speed;
+          const vy = Math.sin(angle) * speed;
+          stars.push(createStar(cx, cy, vx, vy, true));
+        }
+      };
+    })();
+
+    // DOM Particle Explosion Controller for Spark Badge Pill
+    (function initSparkParticleExplosion() {
+      const sparkBtn = document.getElementById('btn-cosmic-spark');
+      if (!sparkBtn) return;
+
+      const palette = ['#00f2fe', '#ff2a85', '#7928ca', '#ffb300', '#ffffff', '#c084fc'];
+
+      function showCosmicToast() {
+        const existing = document.getElementById('cosmic-toast-container');
+        if (existing) existing.remove();
+
+        const container = document.createElement('div');
+        container.id = 'cosmic-toast-container';
+        container.className = 'cosmic-toast-container';
+
+        const toast = document.createElement('div');
+        toast.className = 'cosmic-toast';
+        toast.textContent = '✦ Starlight boosted! Supernova ignited! 🚀';
+
+        container.appendChild(toast);
+        document.body.appendChild(container);
+
+        setTimeout(() => {
+          if (container.parentNode) {
+            container.remove();
+          }
+        }, 3000);
+      }
+
+      function triggerBurst(e) {
+        const rect = sparkBtn.getBoundingClientRect();
+        const clientX = (e && typeof e.clientX === 'number' && e.clientX !== 0) ? e.clientX : (rect.left + rect.width / 2);
+        const clientY = (e && typeof e.clientY === 'number' && e.clientY !== 0) ? e.clientY : (rect.top + rect.height / 2);
+
+        // 1. Simultaneously trigger a .spark-shockwave ring scaling up to 12x and fading over 650ms
+        const shockwave = document.createElement('div');
+        shockwave.className = 'spark-shockwave';
+        shockwave.style.setProperty('--x', `${clientX}px`);
+        shockwave.style.setProperty('--y', `${clientY}px`);
+        document.body.appendChild(shockwave);
+        setTimeout(() => shockwave.remove(), 650);
+
+        // 2. Spawn 28–32 .spark-particle elements at the cursor
+        const particleCount = Math.floor(Math.random() * 5) + 28; // 28 to 32
+        for (let i = 0; i < particleCount; i++) {
+          const p = document.createElement('div');
+          p.className = 'spark-particle';
+
+          const angle = Math.random() * Math.PI * 2;
+          const dist = Math.random() * 160 + 60; // 60px to 220px
+          const tx = Math.cos(angle) * dist;
+          const ty = Math.sin(angle) * dist;
+          const color = palette[Math.floor(Math.random() * palette.length)];
+          const size = Math.random() * 3 + 5; // 5px to 8px
+
+          p.style.width = `${size}px`;
+          p.style.height = `${size}px`;
+          p.style.background = color;
+          p.style.boxShadow = `0 0 12px ${color}, 0 0 24px ${color}`;
+          p.style.setProperty('--x', `${clientX}px`);
+          p.style.setProperty('--y', `${clientY}px`);
+          p.style.setProperty('--tx', `${tx}px`);
+          p.style.setProperty('--ty', `${ty}px`);
+
+          document.body.appendChild(p);
+          setTimeout(() => p.remove(), 850);
+        }
+
+        // 3. Inject 30-40 High-Speed Stars into Canvas Engine
+        if (typeof window.injectCosmicSupernova === 'function') {
+          window.injectCosmicSupernova(clientX, clientY);
+        }
+
+        // 4. Display glassmorphic feedback toast
+        showCosmicToast();
+      }
+
+      sparkBtn.addEventListener('click', triggerBurst);
     })();
   </script>
 
