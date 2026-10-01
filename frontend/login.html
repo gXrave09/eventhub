@@ -590,36 +590,6 @@
         opacity: 0;
       }
     }
-
-    /* Cosmic Glassmorphic Toast */
-    .cosmic-toast {
-      position: fixed;
-      bottom: 28px;
-      left: 50%;
-      transform: translateX(-50%) translateY(30px);
-      background: rgba(18, 14, 30, 0.82);
-      color: #f3e8ff;
-      border: 1px solid rgba(168, 85, 247, 0.4);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      border-radius: var(--md-sys-shape-corner-full);
-      padding: 12px 26px;
-      font-size: 0.88rem;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      z-index: 9999;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(124, 58, 237, 0.35);
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    .cosmic-toast.active {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
   </style>
 </head>
 <body>
@@ -742,12 +712,6 @@
 
       </div>
     </div>
-  </div>
-
-  <!-- Cosmic Glassmorphic Toast Notification -->
-  <div class="cosmic-toast" id="cosmic-toast" role="status" aria-live="polite">
-    <span style="color:#00f2fe;font-size:1.1rem;">✦</span>
-    <span id="cosmic-toast-text">Starlight boosted! Supernova ignited!</span>
   </div>
 
   <!-- Status Toast -->
@@ -905,15 +869,12 @@
       };
     })();
 
-    // DOM Particle Explosion & Cosmic Toast Controller
+    // DOM Particle Explosion Controller
     (function initSparkParticleExplosion() {
       const sparkBtn = document.getElementById('btn-cosmic-spark');
-      const toast = document.getElementById('cosmic-toast');
-      const toastText = document.getElementById('cosmic-toast-text');
       if (!sparkBtn) return;
 
       const palette = ['#00f2fe', '#ff2a85', '#7928ca', '#ffb300', '#ffffff', '#c084fc'];
-      let toastTimer = null;
 
       function triggerBurst(e) {
         const clientX = e.clientX || (sparkBtn.getBoundingClientRect().left + sparkBtn.offsetWidth / 2);
@@ -956,16 +917,6 @@
         // 3. Inject High-Speed Stars into Canvas Engine
         if (typeof window.injectCosmicSupernova === 'function') {
           window.injectCosmicSupernova(clientX, clientY);
-        }
-
-        // 4. Trigger Glassmorphic Cosmic Toast
-        if (toast) {
-          clearTimeout(toastTimer);
-          toastText.textContent = '✦ Starlight boosted! Supernova ignited!';
-          toast.classList.add('active');
-          toastTimer = setTimeout(() => {
-            toast.classList.remove('active');
-          }, 3000);
         }
       }
 
