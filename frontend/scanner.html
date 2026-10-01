@@ -42,6 +42,9 @@
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
+  <!-- Automated Lifecycle & Expiration Purge Engine -->
+  <script src="./event-cleanup.js"></script>
+
   <!-- Apply saved theme BEFORE render -->
   <script>
     (function(){
@@ -727,6 +730,41 @@
           <div style="font-size:0.875rem; margin-top:4px;">
             This pass (<strong>${ticketId}</strong>) was already scanned at <strong>${checkedInMap[ticketId].time}</strong>.<br>
             Attendee: <strong>${checkedInMap[ticketId].attendeeName}</strong> &nbsp;•&nbsp; Event: <strong>${checkedInMap[ticketId].eventName || 'General'}</strong>
+          </div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
+      // Check if event has concluded (expired)
+      let scannedEvent = null;
+      if (data.eventId) {
+        try {
+          const events = JSON.parse(localStorage.getItem('eventhub_events') || '[]');
+          scannedEvent = events.find(e => e.id === data.eventId);
+        } catch (_) {}
+      }
+      if (!scannedEvent && (data.eventDate || data.date)) {
+        scannedEvent = {
+          date: data.eventDate || data.date,
+          startTime: data.eventTime || data.startTime,
+          endTime: data.endTime || null
+        };
+      }
+
+      if (scannedEvent && typeof isEventExpired === 'function' && isEventExpired(scannedEvent)) {
+        playBeep('error');
+        banner.className = 'scan-feedback-banner duplicate';
+        banner.style.background = 'rgba(239,68,68,0.2)';
+        banner.style.borderColor = '#ef4444';
+        banner.style.color = '#ef4444';
+        banner.innerHTML = `
+          <div style="font-weight:800; font-size:1.05rem; display:flex; align-items:center; gap:8px;">
+            <i data-lucide="clock-alert"></i> ENTRY DENIED — EVENT CONCLUDED
+          </div>
+          <div style="font-size:0.875rem; margin-top:4px;">
+            The scheduled end time for <strong>${data.eventName || 'this event'}</strong> has passed.<br>
+            Event details and active passes have been automatically cleared from attendee devices.
           </div>
         `;
         if (window.lucide) window.lucide.createIcons();

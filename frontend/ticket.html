@@ -44,6 +44,9 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="./supabaseClient.js"></script>
 
+  <!-- Automated Lifecycle & Expiration Purge Engine -->
+  <script src="./event-cleanup.js"></script>
+
   <!-- Apply saved theme BEFORE render -->
   <script>
     (function(){
@@ -521,30 +524,77 @@
         <i data-lucide="plus"></i> Create or Register for an Event
       </a>
     </div>
+
+    <!-- Expired Concluded Notice State (Shown when passes have been cleared from registered device) -->
+    <div class="empty-ticket-wrap" id="expired-cleared-tickets" style="display:none;">
+      <div style="font-size:3.5rem; margin-bottom:12px;">⏰</div>
+      <h3 style="font-family:var(--md-sys-typescale-brand-font); font-size:1.4rem; font-weight:700; margin-bottom:8px; color:#ef4444;">Event Concluded • Pass Cleared</h3>
+      <p style="color:var(--md-sys-color-on-surface-variant); font-size:0.95rem; margin-bottom:24px; max-width:480px; margin-left:auto; margin-right:auto; line-height:1.6;">
+        The scheduled end date and time for this event have elapsed. In accordance with system policy, all event details and active entry passes have been automatically deleted from this registered device.
+      </p>
+      <a href="index.html" class="btn btn-primary">
+        <i data-lucide="compass"></i> Explore Upcoming Events
+      </a>
+    </div>
   </main>
 
   <script>
     let activeQrCode = null;
     let customUrlPass = null;
     let customUrlEvent = null;
+    let hasClearedExpiredPasses = false;
 
     // Load available events
     function getStoredEvents() {
+      // 1. Purge expired events from registered devices
+      if (typeof purgeExpiredEventsFromRegisteredDevices === 'function') {
+        const deleted = purgeExpiredEventsFromRegisteredDevices();
+        if (deleted && deleted.length > 0) {
+          hasClearedExpiredPasses = true;
+        }
+      }
+
       let evs = [];
       try {
         evs = JSON.parse(localStorage.getItem('eventhub_events') || '[]');
       } catch(_) {}
       
       if (customUrlEvent) {
-        const existingIdx = evs.findIndex(e => e.id === customUrlEvent.id || e.name === customUrlEvent.name);
-        if (existingIdx !== -1) {
-          evs[existingIdx] = Object.assign({}, evs[existingIdx], customUrlEvent);
+        const urlEvExpired = typeof isEventExpired === 'function' ? isEventExpired(customUrlEvent) : false;
+        const urlEvCreator = typeof isCurrentUserCreator === 'function' ? isCurrentUserCreator(customUrlEvent) : false;
+
+        // If customUrlEvent is expired and this is NOT the creator device, do NOT load or cache it
+        if (urlEvExpired && !urlEvCreator) {
+          hasClearedExpiredPasses = true;
+          customUrlPass = null;
+          customUrlEvent = null;
         } else {
-          evs.unshift(customUrlEvent);
+          const existingIdx = evs.findIndex(e => e.id === customUrlEvent.id || e.name === customUrlEvent.name);
+          if (existingIdx !== -1) {
+            evs[existingIdx] = Object.assign({}, evs[existingIdx], customUrlEvent);
+          } else {
+            evs.unshift(customUrlEvent);
+          }
         }
       }
 
+      // Filter: non-creator devices do NOT retain expired events
+      evs = evs.filter(function (ev) {
+        const expired = typeof isEventExpired === 'function' ? isEventExpired(ev) : false;
+        const creator = typeof isCurrentUserCreator === 'function' ? isCurrentUserCreator(ev) : false;
+        if (expired && !creator) {
+          hasClearedExpiredPasses = true;
+          return false;
+        }
+        return true;
+      });
+
       if (evs.length > 0) return evs;
+
+      // If registered passes were cleared due to event end date/time, do not inject demo fallback
+      if (hasClearedExpiredPasses) {
+        return [];
+      }
 
       // Default fallback demo event
       return [{
@@ -713,14 +763,25 @@
     }
 
     function renderActiveTicket() {
+      const expiredClearedEl = document.getElementById('expired-cleared-tickets');
+      const emptyEl = document.getElementById('empty-tickets');
+
       if (allEvents.length === 0) {
         document.getElementById('ticket-card').style.display = 'none';
-        document.getElementById('empty-tickets').style.display = 'block';
+        if (hasClearedExpiredPasses && expiredClearedEl) {
+          expiredClearedEl.style.display = 'block';
+          if (emptyEl) emptyEl.style.display = 'none';
+        } else {
+          if (expiredClearedEl) expiredClearedEl.style.display = 'none';
+          if (emptyEl) emptyEl.style.display = 'block';
+        }
+        if (window.lucide) window.lucide.createIcons();
         return;
       }
 
       document.getElementById('ticket-card').style.display = 'block';
-      document.getElementById('empty-tickets').style.display = 'none';
+      if (emptyEl) emptyEl.style.display = 'none';
+      if (expiredClearedEl) expiredClearedEl.style.display = 'none';
 
       const ev = allEvents[currentEventIndex];
       const user = getUserData(ev ? ev.id : null);
@@ -875,6 +936,13 @@
 
     window.printOrSavePass = function() {
       window.print();
+    };
+
+    window.onEventHubPurge = function() {
+      allEvents = getStoredEvents();
+      currentEventIndex = 0;
+      renderEventSelector();
+      renderActiveTicket();
     };
 
     initializeTicketPage();

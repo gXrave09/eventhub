@@ -132,6 +132,11 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.lucide) window.lucide.createIcons();
   if (document.getElementById('eh-menu-btn')) bindDropdownEvents();
 
+  // Run lifecycle purge for expired events on registered attendee devices
+  if (typeof purgeExpiredEventsFromRegisteredDevices === 'function') {
+    try { purgeExpiredEventsFromRegisteredDevices(); } catch (_) {}
+  }
+
   initNavbar();
   initHamburger();
   initScrollAnimations();

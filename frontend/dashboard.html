@@ -48,6 +48,9 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="./supabaseClient.js"></script>
 
+  <!-- Automated Lifecycle & Expiration Purge Engine -->
+  <script src="./event-cleanup.js"></script>
+
   <!-- Apply saved theme and sidebar state BEFORE render -->
   <script>
     (function () {
@@ -2537,7 +2540,7 @@
       if (!ev) return false;
       try {
         const myCreated = JSON.parse(localStorage.getItem('eventhub_my_created_events') || '[]');
-        if (myCreated.includes(ev.id)) return true;
+        if (ev.id && Array.isArray(myCreated) && myCreated.includes(ev.id)) return true;
       } catch (_) {}
 
       let user = null;
@@ -2549,16 +2552,13 @@
       const userId = (user && (user.uid || user.id)) || (profile && profile.id) || '';
 
       if (userEmail) {
-        if (ev.creatorEmail && ev.creatorEmail.toLowerCase() === userEmail.toLowerCase()) return true;
-        if (ev.organizerEmail && ev.organizerEmail.toLowerCase() === userEmail.toLowerCase()) return true;
+        const emailLower = userEmail.toLowerCase().trim();
+        if (ev.creatorEmail && ev.creatorEmail.toLowerCase().trim() === emailLower) return true;
+        if (ev.organizerEmail && ev.organizerEmail.toLowerCase().trim() === emailLower) return true;
       }
-      if (userId && ev.creatorId && ev.creatorId === userId) return true;
+      if (userId && ev.creatorId && String(ev.creatorId).trim() === String(userId).trim()) return true;
 
-      // Fallback: If the event was created or stored in this local organizer workspace, treat as manageable
-      if (!ev.creatorEmail && !ev.creatorId) return true;
-      if (!userEmail && !userId) return true;
-
-      return true;
+      return false;
     }
 
     function isEventExpired(ev) {
@@ -2601,6 +2601,10 @@
     }
 
     function loadEvents() {
+      if (typeof purgeExpiredEventsFromRegisteredDevices === 'function') {
+        purgeExpiredEventsFromRegisteredDevices();
+      }
+
       let events = [];
       try { events = JSON.parse(localStorage.getItem('eventhub_events') || '[]'); } catch (e) { }
 
@@ -2989,6 +2993,12 @@
       if (window.lucide) window.lucide.createIcons();
       setTimeout(() => { t.style.opacity = '0'; t.style.pointerEvents = 'none'; }, 3500);
     }
+
+    // Real-time listener for automated event expiration purges across open tabs
+    window.onEventHubPurge = function() {
+      loadEvents();
+      updateMetrics();
+    };
 
     loadEvents();
     updateMetrics();

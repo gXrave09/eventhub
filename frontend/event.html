@@ -51,6 +51,9 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="./supabaseClient.js"></script>
 
+  <!-- Automated Lifecycle & Expiration Purge Engine -->
+  <script src="./event-cleanup.js"></script>
+
   <!-- Apply saved theme BEFORE render -->
   <script>
     (function(){
@@ -820,6 +823,27 @@
     // Check if current user already registered for this event
     function checkExistingRegistration() {
       if (!currentEvent) return false;
+      const isCreator = typeof isCurrentUserCreator === 'function' ? isCurrentUserCreator(currentEvent) : false;
+      const isExpired = typeof isEventExpired === 'function' ? isEventExpired(currentEvent) : false;
+
+      // If event has concluded and this device is NOT creator, purge registration!
+      if (isExpired && !isCreator) {
+        try {
+          const regMap = JSON.parse(localStorage.getItem('eventhub_registrations') || '{}');
+          if (regMap[currentEvent.id]) {
+            delete regMap[currentEvent.id];
+            localStorage.setItem('eventhub_registrations', JSON.stringify(regMap));
+          }
+          const lastTicket = localStorage.getItem('eventhub_last_ticket_id');
+          if (lastTicket && registeredPass && lastTicket === registeredPass.ticketId) {
+            localStorage.removeItem('eventhub_last_ticket_id');
+          }
+        } catch (_) {}
+        isUserRegistered = false;
+        registeredPass = null;
+        return false;
+      }
+
       try {
         const regMap = JSON.parse(localStorage.getItem('eventhub_registrations') || '{}');
         const pass = regMap[currentEvent.id];
@@ -867,6 +891,10 @@
 
     // Load Event from URL params, Storage, or Supabase Cloud
     async function loadEventData() {
+      if (typeof purgeExpiredEventsFromRegisteredDevices === 'function') {
+        purgeExpiredEventsFromRegisteredDevices();
+      }
+
       const params = new URLSearchParams(window.location.search);
       const eventId = params.get('id');
       const autoRegister = params.get('auto') === '1' || params.get('register') === '1';
@@ -891,13 +919,17 @@
           checkedIn:      0
         };
 
-        // Cache into local events list so other pages on this device (dashboard, tickets) know about it
+        // Cache into local events list only if not expired, or if this is the creator device
         try {
-          let list = JSON.parse(localStorage.getItem('eventhub_events') || '[]');
-          const exists = list.some(e => e.id === currentEvent.id || e.name === currentEvent.name);
-          if (!exists) {
-            list.unshift(currentEvent);
-            localStorage.setItem('eventhub_events', JSON.stringify(list));
+          const isExp = typeof isEventExpired === 'function' ? isEventExpired(currentEvent) : false;
+          const isCrt = typeof isCurrentUserCreator === 'function' ? isCurrentUserCreator(currentEvent) : false;
+          if (!isExp || isCrt) {
+            let list = JSON.parse(localStorage.getItem('eventhub_events') || '[]');
+            const exists = list.some(e => e.id === currentEvent.id || e.name === currentEvent.name);
+            if (!exists) {
+              list.unshift(currentEvent);
+              localStorage.setItem('eventhub_events', JSON.stringify(list));
+            }
           }
         } catch (_) {}
       }
@@ -941,13 +973,17 @@
               checkedIn:      dbEvent.checked_in || 0
             };
 
-            // Cache to local events
+            // Cache to local events only if not expired, or if creator device
             try {
-              let list = JSON.parse(localStorage.getItem('eventhub_events') || '[]');
-              const exists = list.some(e => e.id === currentEvent.id);
-              if (!exists) {
-                list.unshift(currentEvent);
-                localStorage.setItem('eventhub_events', JSON.stringify(list));
+              const isExp = typeof isEventExpired === 'function' ? isEventExpired(currentEvent) : false;
+              const isCrt = typeof isCurrentUserCreator === 'function' ? isCurrentUserCreator(currentEvent) : false;
+              if (!isExp || isCrt) {
+                let list = JSON.parse(localStorage.getItem('eventhub_events') || '[]');
+                const exists = list.some(e => e.id === currentEvent.id);
+                if (!exists) {
+                  list.unshift(currentEvent);
+                  localStorage.setItem('eventhub_events', JSON.stringify(list));
+                }
               }
             } catch (_) {}
           }
@@ -958,6 +994,25 @@
 
       if (!currentEvent && events.length > 0) {
         currentEvent = events[0];
+      }
+
+      // Purge concluded event details from registered device
+      if (currentEvent) {
+        const isExp = typeof isEventExpired === 'function' ? isEventExpired(currentEvent) : false;
+        const isCrt = typeof isCurrentUserCreator === 'function' ? isCurrentUserCreator(currentEvent) : false;
+        if (isExp && !isCrt && currentEvent.id) {
+          try {
+            let list = JSON.parse(localStorage.getItem('eventhub_events') || '[]');
+            list = list.filter(e => e.id !== currentEvent.id);
+            localStorage.setItem('eventhub_events', JSON.stringify(list));
+
+            let regMap = JSON.parse(localStorage.getItem('eventhub_registrations') || '{}');
+            if (regMap[currentEvent.id]) {
+              delete regMap[currentEvent.id];
+              localStorage.setItem('eventhub_registrations', JSON.stringify(regMap));
+            }
+          } catch (_) {}
+        }
       }
 
       // Fallback demo event if completely empty
@@ -1108,13 +1163,42 @@
       if (isExpired) {
         if (expiredBadge) expiredBadge.style.display = 'inline-flex';
         if (statusBadge) statusBadge.style.display = 'none';
-        if (!isCreator && !isUserRegistered) {
-          if (expiredNotice) expiredNotice.style.display = 'flex';
+        if (!isCreator) {
+          if (expiredNotice) {
+            expiredNotice.style.display = 'flex';
+            expiredNotice.innerHTML = `
+              <div style="display:flex; align-items:flex-start; gap:10px; width:100%;">
+                <i data-lucide="clock-alert" style="width:20px;height:20px;color:#ef4444;flex-shrink:0;margin-top:2px;"></i>
+                <div>
+                  <div style="font-weight:700; color:#ef4444; font-size:0.95rem;">Event Concluded • Details Cleared</div>
+                  <div style="font-size:0.84rem; color:var(--md-sys-color-on-surface-variant); margin-top:3px; line-height:1.5;">
+                    The scheduled end date and time for this event have passed. In accordance with system policy, all event details and registration passes have been automatically deleted from this registered device.
+                  </div>
+                </div>
+              </div>
+            `;
+          }
           if (heroRegBtn) {
             heroRegBtn.disabled = true;
             heroRegBtn.style.opacity = '0.6';
             heroRegBtn.style.cursor = 'not-allowed';
             if (heroRegText) heroRegText.textContent = 'Event Concluded (Closed)';
+          }
+
+          const passConfirmedBox = document.getElementById('ticket-confirmed-box');
+          const passUnregisteredBox = document.getElementById('ticket-unregistered-box');
+          if (passConfirmedBox) passConfirmedBox.style.display = 'none';
+          if (passUnregisteredBox) {
+            passUnregisteredBox.style.display = 'block';
+            passUnregisteredBox.innerHTML = `
+              <div style="width:48px; height:48px; border-radius:50%; background:rgba(239,68,68,0.15); color:#ef4444; display:flex; align-items:center; justify-content:center; margin:0 auto 12px;">
+                <i data-lucide="clock-alert" style="width:24px;height:24px;"></i>
+              </div>
+              <div style="font-weight:700; font-size:0.98rem; color:#ef4444;">Event Concluded</div>
+              <p style="font-size:0.82rem; color:var(--md-sys-color-on-surface-variant); margin:6px 0 0; line-height:1.5;">
+                Registration is closed and active entry passes have been automatically cleared from registered attendee devices.
+              </p>
+            `;
           }
         }
       } else {
@@ -1725,6 +1809,11 @@
     document.getElementById('event-delete-modal')?.addEventListener('click', (e) => {
       if (e.target.id === 'event-delete-modal') closeDeleteEventModal();
     });
+
+    // Handle live background purge of expired events across tabs
+    window.onEventHubPurge = function() {
+      loadEventData();
+    };
 
     // Initialize
     loadEventData();
