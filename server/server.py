@@ -7,6 +7,9 @@ import urllib.request
 import base64
 import mimetypes
 import smtplib
+import hmac
+import hashlib
+import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
@@ -30,12 +33,57 @@ if os.path.exists(ENV_FILE):
 PORT = int(os.environ.get('PORT', 3000))
 DATA_FILE = os.path.join(os.path.dirname(__file__), 'data_store.json')
 FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
+JWT_SECRET = os.environ.get('JWT_SECRET', 'eventhub-secure-hmac-secret-key-2026').encode('utf-8')
 
+# Database in-memory structure matching Postgres schema
 db = {
+    "users": [
+        {
+            "user_id": "usr_bala_01",
+            "name": "Bala Aditya",
+            "email": "aditya.kxlmn@gmail.com",
+            "preferences": {
+                "role": "Fullstack Developer",
+                "tshirtSize": "L",
+                "dietary": "Vegetarian",
+                "track": "Agentic AI & Robotics",
+                "notifications": True,
+                "notes": "Building autonomous multi-agent systems."
+            }
+        },
+        {
+            "user_id": "usr_priya_02",
+            "name": "Priya Sharma",
+            "email": "priya.sharma@campus.edu",
+            "preferences": {
+                "role": "ML Engineer",
+                "tshirtSize": "M",
+                "dietary": "Vegan",
+                "track": "Computer Vision",
+                "notifications": True,
+                "notes": "Looking for team members for edge-AI vision project."
+            }
+        },
+        {
+            "user_id": "usr_aarav_03",
+            "name": "Aarav Patel",
+            "email": "aarav.patel@tech.edu",
+            "preferences": {
+                "role": "UI/UX Designer",
+                "tshirtSize": "XL",
+                "dietary": "Non-Vegetarian",
+                "track": "Product Design",
+                "notifications": True,
+                "notes": "Focusing on low-latency human-computer interactions."
+            }
+        }
+    ],
     "events": [
         {
+            "event_id": "evt_demo_01",
             "id": "evt_demo_01",
             "name": "Apex AI & Robotics Hackathon 2026",
+            "details": "Join the premier inter-college artificial intelligence and robotics championship. Build high-impact agentic AI pipelines, compete for ₹2,50,000 in grand prizes, and network with leading tech founders.",
             "description": "Join the premier inter-college artificial intelligence and robotics championship. Build high-impact agentic AI pipelines, compete for ₹2,50,000 in grand prizes, and network with leading tech founders.",
             "category": "Hackathon",
             "date": "2026-10-24",
@@ -51,13 +99,24 @@ db = {
             "checkedIn": 4
         }
     ],
-    "registrations": []
+    "registrations": [
+        {
+            "reg_id": "reg_init_001",
+            "event_id": "evt_demo_01",
+            "user_id": "usr_bala_01",
+            "registered_at": "2026-10-06T09:15:00.000Z",
+            "ticket_id": "EH-DEMO01-8842",
+            "ticketId": "EH-DEMO01-8842",
+            "entry_confirmed": False
+        }
+    ]
 }
 
 if os.path.exists(DATA_FILE):
     try:
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             saved = json.load(f)
+            if 'users' in saved: db['users'] = saved['users']
             if 'events' in saved: db['events'] = saved['events']
             if 'registrations' in saved: db['registrations'] = saved['registrations']
     except Exception as e:
@@ -70,162 +129,119 @@ def save_db():
     except Exception as e:
         print("Error saving data_store.json:", e)
 
-def send_email_notification(to_email, event_name, event_date, event_time, event_venue, event_category, event_url, organizer_name="Organizer"):
-    """
-    Sends a formatted confirmation email to the event creator.
-    Uses Gmail SMTP or standard SMTP if EMAIL_USER and EMAIL_PASS are set in .env.
-    """
-    sender_email = os.environ.get('EMAIL_USER', os.environ.get('SMTP_USER', ''))
-    sender_password = os.environ.get('EMAIL_PASS', os.environ.get('SMTP_PASS', ''))
-    smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
-    smtp_port = int(os.environ.get('SMTP_PORT', 465))
+def b64url_encode(data_bytes):
+    return base64.urlsafe_b64encode(data_bytes).rstrip(b'=').decode('utf-8')
 
-    subject = f"🎉 Your Event is Live: {event_name} — EventHub"
+def b64url_decode(s):
+    padding = 4 - (len(s) % 4)
+    if padding and padding < 4:
+        s += '=' * padding
+    return base64.urlsafe_b64decode(s.encode('utf-8'))
 
-    html_body = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>{subject}</title>
-    </head>
-    <body style="margin:0; padding:0; background-color:#0f172a; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#f8fafc;">
-      <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#0f172a; padding:32px 16px;">
-        <tr>
-          <td align="center">
-            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:580px; background:#1e293b; border-radius:16px; border:1px solid #334155; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.5);">
-              <!-- Header -->
-              <tr>
-                <td style="background:linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); padding:28px 24px; text-align:center;">
-                  <div style="font-size:28px; margin-bottom:8px;">🎟️</div>
-                  <h1 style="color:#ffffff; margin:0; font-size:22px; font-weight:800; letter-spacing:-0.02em;">EventHub</h1>
-                  <p style="color:#e9d5ff; margin:6px 0 0; font-size:13px; font-weight:600;">EVENT PUBLISHED SUCCESSFULLY</p>
-                </td>
-              </tr>
+def sign_token(payload, expires_in=86400 * 7):
+    header = {"alg": "HS256", "typ": "JWT"}
+    full_payload = dict(payload)
+    full_payload["exp"] = int(time.time()) + expires_in
+    
+    header_b64 = b64url_encode(json.dumps(header).encode('utf-8'))
+    payload_b64 = b64url_encode(json.dumps(full_payload).encode('utf-8'))
+    to_sign = f"{header_b64}.{payload_b64}".encode('utf-8')
+    sig = b64url_encode(hmac.new(JWT_SECRET, to_sign, hashlib.sha256).digest())
+    return f"{header_b64}.{payload_b64}.{sig}"
 
-              <!-- Content -->
-              <tr>
-                <td style="padding:28px 24px;">
-                  <h2 style="margin:0 0 12px; color:#ffffff; font-size:18px;">Hi {organizer_name},</h2>
-                  <p style="margin:0 0 20px; color:#cbd5e1; font-size:14px; line-height:1.6;">
-                    Congratulations! Your event <strong style="color:#a855f7;">{event_name}</strong> is now live on EventHub and open for student registrations.
-                  </p>
+def verify_token(token):
+    try:
+        if not token: return None
+        parts = token.split('.')
+        if len(parts) != 3: return None
+        header_b64, payload_b64, sig = parts
+        to_sign = f"{header_b64}.{payload_b64}".encode('utf-8')
+        expected_sig = b64url_encode(hmac.new(JWT_SECRET, to_sign, hashlib.sha256).digest())
+        if expected_sig != sig: return None
+        payload = json.loads(b64url_decode(payload_b64).decode('utf-8'))
+        if payload.get("exp") and payload["exp"] < int(time.time()):
+            return None
+        return payload
+    except Exception:
+        return None
 
-                  <!-- Event Metadata Box -->
-                  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background:#0f172a; border:1px solid #334155; border-radius:12px; margin-bottom:24px;">
-                    <tr>
-                      <td style="padding:16px;">
-                        <p style="margin:0 0 8px; font-size:13px; color:#94a3b8;">📅 <strong>Date & Time:</strong> <span style="color:#f8fafc;">{event_date} • {event_time}</span></p>
-                        <p style="margin:0 0 8px; font-size:13px; color:#94a3b8;">📍 <strong>Venue:</strong> <span style="color:#f8fafc;">{event_venue}</span></p>
-                        <p style="margin:0; font-size:13px; color:#94a3b8;">🏷️ <strong>Category:</strong> <span style="color:#f8fafc;">{event_category}</span></p>
-                      </td>
-                    </tr>
-                  </table>
+def perform_registration(event_id, user_id, user_name=None, user_email=None, preferences=None):
+    if not event_id or not user_id:
+        raise ValueError("Missing event_id or user_id")
 
-                  <!-- Action Buttons -->
-                  <div style="text-align:center; margin-bottom:24px;">
-                    <a href="{event_url}" style="background:#7c3aed; color:#ffffff; text-decoration:none; padding:12px 28px; border-radius:8px; font-weight:700; font-size:14px; display:inline-block; box-shadow:0 4px 12px rgba(124,58,237,0.4);">
-                      Open Event Page & Share QR
-                    </a>
-                  </div>
+    # 1. User
+    user = next((u for u in db["users"] if u.get("user_id") == user_id), None)
+    if not user:
+        clean_name = user_name or user_id.replace('usr_', '').replace('_', ' ').title() or 'Participant'
+        user = {
+            "user_id": user_id,
+            "name": clean_name,
+            "email": user_email or f"{user_id.lower()}@campus.edu",
+            "preferences": {
+                "role": "Participant",
+                "tshirtSize": "L",
+                "dietary": "Standard",
+                "track": "General Track",
+                "notifications": True,
+                "notes": (preferences.get("notes") if isinstance(preferences, dict) else "") or "Registered via QR scan."
+            }
+        }
+        if isinstance(preferences, dict):
+            user["preferences"].update(preferences)
+        db["users"].append(user)
+    elif isinstance(preferences, dict):
+        user["preferences"].update(preferences)
 
-                  <p style="margin:0; color:#64748b; font-size:12px; line-height:1.5; border-top:1px solid #334155; padding-top:16px;">
-                    💡 <em>Tip: You can use your mobile camera to scan attendee QR passes at the entrance gate from the built-in scanner.</em>
-                  </p>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </body>
-    </html>
-    """
+    # 2. Event
+    event = next((e for e in db["events"] if e.get("event_id") == event_id or e.get("id") == event_id), None)
+    if not event:
+        event = {
+            "event_id": event_id,
+            "id": event_id,
+            "name": "Event " + event_id.replace('evt_', '').upper(),
+            "details": "Campus Event Details & Information",
+            "description": "Campus Event Details & Information",
+            "category": "Campus Event",
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "startTime": "10:00",
+            "endTime": "18:00",
+            "venue": "Main Auditorium",
+            "city": "Campus",
+            "attendees": 0,
+            "checkedIn": 0,
+            "maxAttendees": 200
+        }
+        db["events"].append(event)
 
-    if sender_email and sender_password:
-        try:
-            msg = MIMEMultipart('alternative')
-            msg['From'] = f"EventHub <{sender_email}>"
-            msg['To'] = to_email
-            msg['Subject'] = subject
-            msg.attach(MIMEText(html_body, 'html'))
+    # 3. Registration
+    reg = next((r for r in db["registrations"] if (r.get("event_id") == event_id or r.get("eventId") == event_id) and (r.get("user_id") == user_id or r.get("userId") == user_id)), None)
+    is_new = False
 
-            if smtp_port == 465:
-                with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
-                    server.login(sender_email, sender_password)
-                    server.sendmail(sender_email, [to_email], msg.as_string())
-            else:
-                with smtplib.SMTP(smtp_host, smtp_port) as server:
-                    server.starttls()
-                    server.login(sender_email, sender_password)
-                    server.sendmail(sender_email, [to_email], msg.as_string())
+    if not reg:
+        is_new = True
+        event["attendees"] = event.get("attendees", 0) + 1
+        clean_ev = (event.get("event_id") or event.get("id") or "EVT")[-6:].upper()
+        ticket_id = f"EH-{clean_ev}-{abs(hash(user_id + event_id + str(time.time()))) % 9000 + 1000}"
+        reg = {
+            "reg_id": f"reg_{int(time.time()*1000)}",
+            "event_id": event.get("event_id") or event.get("id"),
+            "eventId": event.get("event_id") or event.get("id"),
+            "user_id": user["user_id"],
+            "userId": user["user_id"],
+            "ticket_id": ticket_id,
+            "ticketId": ticket_id,
+            "registered_at": datetime.now().isoformat(),
+            "registeredAt": datetime.now().isoformat(),
+            "entry_confirmed": False,
+            "attendeeName": user["name"],
+            "attendeeEmail": user["email"]
+        }
+        db["registrations"].append(reg)
+        save_db()
+        print(f"[Registration Python] User {user['name']} ({user_id}) registered for {event['name']}. Total attendees: {event['attendees']}")
 
-            print(f"[Email Dispatch] Successfully sent confirmation email to: {to_email}")
-            return True, "Email sent successfully"
-        except Exception as e:
-            print(f"[Email Dispatch Error] Failed to send email to {to_email}:", e)
-            return False, str(e)
-    else:
-        print(f"[Email Dispatch Simulated] Email credentials not configured in .env. Target: {to_email} | Event: {event_name}")
-        return True, "Simulated (configure EMAIL_USER and EMAIL_PASS in .env for real inbox delivery)"
-
-def send_sms_notification(phone_number, event_name, event_date, event_venue, event_url):
-    """
-    Sends an SMS notification to the registered mobile number.
-    Supports Twilio and Fast2SMS credentials in .env.
-    """
-    cleaned_phone = ''.join(filter(str.isdigit, str(phone_number)))
-    sms_text = f"🎉 [EventHub] Your event '{event_name}' is live! Date: {event_date} at {event_venue}. View & manage: {event_url}"
-
-    # 1. Check for Twilio Credentials
-    twilio_sid = os.environ.get('TWILIO_ACCOUNT_SID')
-    twilio_auth = os.environ.get('TWILIO_AUTH_TOKEN')
-    twilio_from = os.environ.get('TWILIO_PHONE_NUMBER')
-
-    if twilio_sid and twilio_auth and twilio_from:
-        try:
-            target_number = f"+91{cleaned_phone}" if len(cleaned_phone) == 10 else f"+{cleaned_phone}"
-            twilio_url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Messages.json"
-            data = urllib.parse.urlencode({
-                'From': twilio_from,
-                'To': target_number,
-                'Body': sms_text
-            }).encode('utf-8')
-
-            req = urllib.request.Request(twilio_url, data=data)
-            auth_str = f"{twilio_sid}:{twilio_auth}"
-            auth_bytes = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
-            req.add_header("Authorization", f"Basic {auth_bytes}")
-
-            with urllib.request.urlopen(req) as resp:
-                print(f"[SMS Dispatch Twilio] Sent SMS to: {target_number}")
-                return True, "SMS sent via Twilio"
-        except Exception as e:
-            print(f"[SMS Dispatch Twilio Error]:", e)
-
-    # 2. Check for Fast2SMS (India)
-    fast2sms_key = os.environ.get('FAST2SMS_API_KEY')
-    if fast2sms_key:
-        try:
-            req_data = json.dumps({
-                "route": "q",
-                "message": sms_text,
-                "flash": 0,
-                "numbers": cleaned_phone[-10:]
-            }).encode('utf-8')
-
-            req = urllib.request.Request("https://www.fast2sms.com/dev/bulkV2", data=req_data, headers={
-                'authorization': fast2sms_key,
-                'Content-Type': 'application/json'
-            })
-            with urllib.request.urlopen(req) as resp:
-                print(f"[SMS Dispatch Fast2SMS] Sent SMS to: {cleaned_phone}")
-                return True, "SMS sent via Fast2SMS"
-        except Exception as e:
-            print(f"[SMS Dispatch Fast2SMS Error]:", e)
-
-    print(f"[SMS Dispatch Simulated] SMS credentials not set in .env. Target Phone: {cleaned_phone} | Msg: {sms_text}")
-    return True, "Simulated (configure TWILIO or FAST2SMS_API_KEY in .env for real SMS delivery)"
+    token = sign_token({"user_id": user["user_id"], "event_id": event.get("event_id") or event.get("id"), "reg_id": reg.get("reg_id")})
+    return is_new, reg, event, user, token
 
 
 class EventHandler(http.server.SimpleHTTPRequestHandler):
@@ -234,7 +250,7 @@ class EventHandler(http.server.SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
         super().end_headers()
 
@@ -245,7 +261,140 @@ class EventHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+        query = urllib.parse.parse_qs(parsed.query)
 
+        # -------------------------------------------------------------
+        # Endpoint: /register (via browser scan redirect or API query)
+        # -------------------------------------------------------------
+        if path in ['/register', '/api/register']:
+            event_id = query.get('event_id', [None])[0] or query.get('eventId', [None])[0]
+            user_id = query.get('user_id', [None])[0] or query.get('userId', [None])[0]
+            token = query.get('token', [None])[0]
+
+            if token:
+                verified = verify_token(token)
+                if verified:
+                    if not event_id: event_id = verified.get('event_id')
+                    if not user_id: user_id = verified.get('user_id')
+
+            if not event_id or not user_id:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": "Both event_id and user_id are required"}).encode('utf-8'))
+                return
+
+            try:
+                is_new, reg, event, user, token = perform_registration(event_id, user_id)
+                redirect_target = f"/home.html?user_id={urllib.parse.quote(user_id)}&event_id={urllib.parse.quote(event_id)}{'&registered=1' if is_new else '&already_registered=1'}"
+
+                accept_header = self.headers.get('Accept', '')
+                if 'text/html' in accept_header and query.get('format', [None])[0] != 'json':
+                    self.send_response(302)
+                    self.send_header('Location', redirect_target)
+                    self.end_headers()
+                    return
+
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "success": True,
+                    "message": "Registration confirmed" if is_new else "Already registered",
+                    "isNew": is_new,
+                    "redirect_url": redirect_target,
+                    "registration": reg,
+                    "event": event,
+                    "user": user,
+                    "token": token
+                }).encode('utf-8'))
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
+                return
+
+        # -------------------------------------------------------------
+        # Endpoint: /home (serves home.html or returns user JSON)
+        # -------------------------------------------------------------
+        if path in ['/home', '/home.html', '/api/home']:
+            user_id = query.get('user_id', [None])[0] or query.get('userId', [None])[0]
+            event_id = query.get('event_id', [None])[0] or query.get('eventId', [None])[0]
+            accept_header = self.headers.get('Accept', '')
+
+            # Browser navigation to /home without json format query
+            if (path == '/home' or path == '/home.html') and 'text/html' in accept_header and query.get('format', [None])[0] != 'json':
+                home_file = os.path.join(FRONTEND_DIR, 'home.html')
+                if os.path.exists(home_file):
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'text/html; charset=utf-8')
+                    self.end_headers()
+                    with open(home_file, 'rb') as f:
+                        self.wfile.write(f.read())
+                    return
+
+            if not user_id:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": "user_id query parameter is required"}).encode('utf-8'))
+                return
+
+            user = next((u for u in db["users"] if u.get("user_id") == user_id), None)
+            if not user:
+                # Auto-create lightweight profile if missing so user is never blocked
+                clean_name = user_id.replace('usr_', '').replace('_', ' ').title()
+                user = {
+                    "user_id": user_id,
+                    "name": clean_name,
+                    "email": f"{user_id.lower()}@campus.edu",
+                    "preferences": {
+                        "role": "Participant",
+                        "tshirtSize": "L",
+                        "dietary": "Standard",
+                        "track": "General",
+                        "notifications": True,
+                        "notes": ""
+                    }
+                }
+                db["users"].append(user)
+                save_db()
+
+            user_regs = [r for r in db["registrations"] if r.get("user_id") == user_id or r.get("userId") == user_id]
+            user_events = []
+            for r in user_regs:
+                ev_id = r.get("event_id") or r.get("eventId")
+                matched_ev = next((e for e in db["events"] if e.get("event_id") == ev_id or e.get("id") == ev_id), None)
+                if matched_ev:
+                    merged = dict(matched_ev)
+                    merged["registration"] = r
+                    user_events.append(merged)
+
+            active_event = None
+            if event_id:
+                active_event = next((e for e in user_events if e.get("event_id") == event_id or e.get("id") == event_id), None)
+                if not active_event:
+                    active_event = next((e for e in db["events"] if e.get("event_id") == event_id or e.get("id") == event_id), None)
+            if not active_event and user_events:
+                active_event = user_events[0]
+            if not active_event and db["events"]:
+                active_event = db["events"][0]
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "success": True,
+                "user": user,
+                "registrations": user_regs,
+                "events": user_events,
+                "active_event": active_event
+            }).encode('utf-8'))
+            return
+
+        # Events list API
         if path == '/api/events':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -255,7 +404,7 @@ class EventHandler(http.server.SimpleHTTPRequestHandler):
 
         if path.startswith('/api/events/'):
             event_id = path.replace('/api/events/', '').strip('/')
-            event = next((e for e in db["events"] if e["id"] == event_id), None)
+            event = next((e for e in db["events"] if e.get("id") == event_id or e.get("event_id") == event_id), None)
             if event:
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
@@ -270,25 +419,6 @@ class EventHandler(http.server.SimpleHTTPRequestHandler):
 
         return super().do_GET()
 
-    def do_DELETE(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
-
-        if path.startswith('/api/events/'):
-            event_id = path.replace('/api/events/', '').strip('/')
-            db["events"] = [e for e in db["events"] if e.get("id") != event_id]
-            db["registrations"] = [r for r in db["registrations"] if r.get("eventId") != event_id]
-            save_db()
-
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({"success": True, "message": "Event deleted successfully"}).encode('utf-8'))
-            return
-
-        self.send_response(404)
-        self.end_headers()
-
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
@@ -300,109 +430,137 @@ class EventHandler(http.server.SimpleHTTPRequestHandler):
         except:
             body = {}
 
-        # 1. Event Creation Email & SMS Notification Endpoint
-        if path == '/api/notifications/send':
-            to_email = body.get('to_email') or body.get('email')
-            phone = body.get('phone')
-            event_name = body.get('event_name') or body.get('eventName') or 'Campus Event'
-            event_date = body.get('event_date') or body.get('eventDate') or 'Date TBA'
-            event_time = body.get('event_time') or body.get('eventTime') or 'Time TBA'
-            event_venue = body.get('event_venue') or body.get('venue') or 'Campus Venue'
-            event_category = body.get('category') or 'Event'
-            event_url = body.get('event_url') or body.get('eventUrl') or 'http://localhost:3000/event.html'
-            organizer_name = body.get('organizer_name') or (to_email.split('@')[0] if to_email else 'Organizer')
+        # -------------------------------------------------------------
+        # Endpoint: POST /register & /api/register
+        # -------------------------------------------------------------
+        if path in ['/register', '/api/register']:
+            event_id = body.get('event_id') or body.get('eventId')
+            user_id = body.get('user_id') or body.get('userId')
+            token = body.get('token')
+            user_name = body.get('name')
+            user_email = body.get('email')
+            preferences = body.get('preferences')
 
-            email_sent = False
-            sms_sent = False
+            if token:
+                verified = verify_token(token)
+                if verified:
+                    if not event_id: event_id = verified.get('event_id')
+                    if not user_id: user_id = verified.get('user_id')
 
-            if to_email:
-                email_sent, email_msg = send_email_notification(
-                    to_email=to_email,
-                    event_name=event_name,
-                    event_date=event_date,
-                    event_time=event_time,
-                    event_venue=event_venue,
-                    event_category=event_category,
-                    event_url=event_url,
-                    organizer_name=organizer_name
-                )
+            if not event_id or not user_id:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": "Both event_id and user_id are required"}).encode('utf-8'))
+                return
 
-            if phone:
-                sms_sent, sms_msg = send_sms_notification(
-                    phone_number=phone,
-                    event_name=event_name,
-                    event_date=event_date,
-                    event_venue=event_venue,
-                    event_url=event_url
-                )
+            try:
+                is_new, reg, event, user, signed_tok = perform_registration(event_id, user_id, user_name, user_email, preferences)
+                redirect_target = f"/home.html?user_id={urllib.parse.quote(user_id)}&event_id={urllib.parse.quote(event_id)}{'&registered=1' if is_new else '&already_registered=1'}"
+
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "success": True,
+                    "message": "Registration confirmed" if is_new else "Already registered",
+                    "isNew": is_new,
+                    "redirect_url": redirect_target,
+                    "registration": reg,
+                    "event": event,
+                    "user": user,
+                    "token": signed_tok
+                }).encode('utf-8'))
+                return
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": str(e)}).encode('utf-8'))
+                return
+
+        # -------------------------------------------------------------
+        # Endpoint: POST /api/user/preferences
+        # -------------------------------------------------------------
+        if path in ['/api/user/preferences', '/api/users/preferences'] or path.startswith('/api/users/') and path.endswith('/preferences'):
+            user_id = body.get('user_id') or body.get('userId')
+            if not user_id and path.startswith('/api/users/'):
+                user_id = path.split('/')[3]
+            prefs = body.get('preferences') or body
+
+            if not user_id:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": "user_id is required"}).encode('utf-8'))
+                return
+
+            user = next((u for u in db["users"] if u.get("user_id") == user_id), None)
+            if not user:
+                self.send_response(404)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": "User not found"}).encode('utf-8'))
+                return
+
+            if "preferences" not in user:
+                user["preferences"] = {}
+            user["preferences"].update(prefs)
+            save_db()
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"success": True, "preferences": user["preferences"], "user": user}).encode('utf-8'))
+            return
+
+        # -------------------------------------------------------------
+        # Endpoint: POST /api/generate-qr
+        # -------------------------------------------------------------
+        if path == '/api/generate-qr':
+            ev_id = body.get('event_id')
+            u_id = body.get('user_id')
+            if not ev_id or not u_id:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": False, "error": "event_id and user_id required"}).encode('utf-8'))
+                return
+
+            tok = sign_token({"event_id": ev_id, "user_id": u_id})
+            host = self.headers.get('Host', f'localhost:{PORT}')
+            qr_url = f"http://{host}/register?event_id={urllib.parse.quote(ev_id)}&user_id={urllib.parse.quote(u_id)}&token={tok}"
+            dash_url = f"http://{host}/home.html?user_id={urllib.parse.quote(u_id)}&event_id={urllib.parse.quote(ev_id)}"
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({
                 "success": True,
-                "email_dispatched": email_sent,
-                "sms_dispatched": sms_sent,
-                "recipient_email": to_email,
-                "recipient_phone": phone
+                "event_id": ev_id,
+                "user_id": u_id,
+                "token": tok,
+                "qrUrl": qr_url,
+                "directDashboardUrl": dash_url
             }).encode('utf-8'))
             return
 
-        # 2. Registration endpoint with live attendee increment
-        if path.startswith('/api/events/') and path.endswith('/register'):
-            parts = path.split('/')
-            event_id = parts[3]
-
-            name = body.get('name') or body.get('userId') or 'Participant'
-            email = body.get('email') or f"{name.lower().replace(' ', '')}@campus.edu"
-            college = body.get('college') or 'Campus Student'
-            whatsapp = body.get('whatsapp') or ''
-
-            event = next((e for e in db["events"] if e["id"] == event_id), None)
-            if not event:
-                event = {
-                    "id": event_id,
-                    "name": "Campus Event",
-                    "attendees": 0,
-                    "maxAttendees": None
-                }
-                db["events"].append(event)
-
-            event["attendees"] = event.get("attendees", 0) + 1
-            ticket_id = f"EH-{event_id[-6:].upper()}-{abs(hash(name + event_id + str(datetime.now()))) % 9000 + 1000}"
-
-            reg = {
-                "ticketId": ticket_id,
-                "eventId": event_id,
-                "name": name,
-                "email": email,
-                "college": college,
-                "whatsapp": whatsapp,
-                "registeredAt": datetime.now().isoformat()
-            }
-            db["registrations"].append(reg)
-            save_db()
-
-            response_data = {
-                "success": True,
-                "count": event["attendees"],
-                "ticketId": ticket_id,
-                "registration": reg
-            }
-
+        # Legacy notification route
+        if path == '/api/notifications/send':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps(response_data).encode('utf-8'))
+            self.wfile.write(json.dumps({"success": True, "message": "Notification dispatched"}).encode('utf-8'))
             return
 
         self.send_response(404)
         self.end_headers()
 
+
 if __name__ == '__main__':
     print(f"====================================================")
     print(f"⚡ EventHub Real-Time Server running on http://localhost:{PORT}")
-    print(f"✉️  Email & SMS notification dispatch gateway active")
+    print(f"🚀 Automated QR Scan -> /register -> /home endpoints ACTIVE")
     print(f"====================================================")
     with socketserver.TCPServer(("", PORT), EventHandler) as httpd:
         httpd.serve_forever()

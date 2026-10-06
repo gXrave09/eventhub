@@ -1,8 +1,51 @@
 {
+  "users": [
+    {
+      "user_id": "usr_bala_01",
+      "name": "Bala Aditya",
+      "email": "aditya.kxlmn@gmail.com",
+      "preferences": {
+        "role": "Fullstack Developer",
+        "tshirtSize": "L",
+        "dietary": "Vegetarian",
+        "track": "Agentic AI & Robotics",
+        "notifications": true,
+        "notes": "Building autonomous multi-agent systems."
+      }
+    },
+    {
+      "user_id": "usr_priya_02",
+      "name": "Priya Sharma",
+      "email": "priya.sharma@campus.edu",
+      "preferences": {
+        "role": "ML Engineer",
+        "tshirtSize": "M",
+        "dietary": "Vegan",
+        "track": "Computer Vision",
+        "notifications": true,
+        "notes": "Looking for team members for edge-AI vision project."
+      }
+    },
+    {
+      "user_id": "usr_aarav_03",
+      "name": "Aarav Patel",
+      "email": "aarav.patel@tech.edu",
+      "preferences": {
+        "role": "UI/UX Designer",
+        "tshirtSize": "XL",
+        "dietary": "Non-Vegetarian",
+        "track": "Product Design",
+        "notifications": true,
+        "notes": "Focusing on low-latency human-computer interactions."
+      }
+    }
+  ],
   "events": [
     {
+      "event_id": "evt_demo_01",
       "id": "evt_demo_01",
       "name": "Apex AI & Robotics Hackathon 2026",
+      "details": "Join the premier inter-college artificial intelligence and robotics championship. Build high-impact agentic AI pipelines, compete for \u20b92,50,000 in grand prizes, and network with leading tech founders.",
       "description": "Join the premier inter-college artificial intelligence and robotics championship. Build high-impact agentic AI pipelines, compete for \u20b92,50,000 in grand prizes, and network with leading tech founders.",
       "category": "Hackathon",
       "date": "2026-10-24",
@@ -14,34 +57,33 @@
       "maxAttendees": 150,
       "organizerEmail": "organizer@eventhub.io",
       "organizerPhone": "+91 98765 43210",
-      "attendees": 18,
+      "attendees": 19,
       "checkedIn": 4
-    },
-    {
-      "id": "evt_1789733420053",
-      "name": "Campus Event",
-      "attendees": 2,
-      "maxAttendees": null
     }
   ],
   "registrations": [
     {
-      "ticketId": "EH-420053-6427",
-      "eventId": "evt_1789733420053",
-      "name": "Bala aditya",
-      "email": "aditya.kxlmn@gmail.com",
-      "college": "SR University",
-      "whatsapp": "8247084125",
-      "registeredAt": "2026-09-18T17:45:28.297466"
+      "reg_id": "reg_init_001",
+      "event_id": "evt_demo_01",
+      "user_id": "usr_bala_01",
+      "registered_at": "2026-10-06T09:15:00.000Z",
+      "ticket_id": "EH-DEMO01-8842",
+      "ticketId": "EH-DEMO01-8842",
+      "entry_confirmed": false
     },
     {
-      "ticketId": "EH-420053-9149",
-      "eventId": "evt_1789733420053",
-      "name": "aditya",
-      "email": "aditya.kxlmn@gmail.com",
-      "college": "SR University",
-      "whatsapp": "+91 8247084125",
-      "registeredAt": "2026-09-18T17:48:55.754991"
+      "reg_id": "reg_1791276202141",
+      "event_id": "evt_demo_01",
+      "eventId": "evt_demo_01",
+      "user_id": "usr_priya_02",
+      "userId": "usr_priya_02",
+      "ticket_id": "EH-EMO_01-2657",
+      "ticketId": "EH-EMO_01-2657",
+      "registered_at": "2026-10-06T14:13:22.141855",
+      "registeredAt": "2026-10-06T14:13:22.141912",
+      "entry_confirmed": false,
+      "attendeeName": "Priya Sharma",
+      "attendeeEmail": "priya.sharma@campus.edu"
     }
   ]
 }

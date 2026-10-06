@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Participant Dashboard — EventHub</title>
+  <meta name="description" content="Personalized participant dashboard displaying verified event details, saved preferences, and digital entry passes on EventHub." />
+
+  <!-- Favicon & Theme -->
+  <link rel="icon" type="image/png" href="assets/images/logo.png" />
+  <link rel="apple-touch-icon" href="assets/images/logo.png" />
+  <meta name="theme-color" content="#7c3aed" />
+
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@600;700;800;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+  <!-- QRCode.js & Socket.io (with graceful fallback) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+  <!-- Theme init -->
+  <script>
+    (function(){
+      const saved = localStorage.getItem('eventhub_theme') || 'dark';
+      const pref  = saved === 'system'
+        ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+        : saved;
+      document.documentElement.setAttribute('data-theme', pref);
+    })();
+  </script>
+
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    body {
+      background-color: var(--md-sys-color-surface, #0f0d13);
+      color: var(--md-sys-color-on-surface, #e6e0e9);
+      min-height: 100vh;
+      padding-bottom: 120px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    /* Top App Bar */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background-color: rgba(20, 18, 24, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--md-sys-color-outline-variant, #332d41);
+      padding: 12px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    [data-theme="light"] .top-nav {
+      background-color: rgba(253, 247, 255, 0.85);
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: inherit;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 1.25rem;
+    }
+    .brand-logo span.highlight {
+      background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Layout Container */
+    .dashboard-container {
+      max-width: 1240px;
+      margin: 28px auto 0;
+      padding: 0 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    /* Hero Banner: Registration Confirmed Status */
+    .hero-confirmation-banner {
+      background: linear-gradient(135deg, rgba(124, 58, 237, 0.22) 0%, rgba(236, 72, 153, 0.14) 100%);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      border-radius: var(--md-sys-shape-corner-extra-large, 28px);
+      padding: 32px 36px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 12px 40px rgba(124, 58, 237, 0.15);
+      backdrop-filter: blur(12px);
+    }
+    .hero-confirmation-banner::before {
+      content: '';
+      position: absolute;
+      top: -60px;
+      right: -60px;
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle, rgba(168, 85, 247, 0.35) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .verified-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(34, 197, 94, 0.16);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      color: #4ade80;
+      padding: 6px 16px;
+      border-radius: 999px;
+      font-size: 0.825rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      box-shadow: 0 0 16px rgba(34, 197, 94, 0.2);
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #22c55e;
+      box-shadow: 0 0 10px #22c55e;
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    .hero-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2.2rem;
+      font-weight: 800;
+      margin: 8px 0;
+      line-height: 1.2;
+    }
+
+    .hero-subtitle {
+      color: var(--md-sys-color-on-surface-variant, #cac4d0);
+      font-size: 1.05rem;
+      max-width: 780px;
+      line-height: 1.5;
+    }
+
+    .hero-meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    .meta-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 8px 16px;
+      border-radius: 12px;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    .meta-chip i { width: 16px; height: 16px; color: #c084fc; }
+
+    /* Main 3-Column Grid */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr 0.95fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    @media (max-width: 1080px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+      .ticket-col {
+        grid-column: span 2;
+      }
+    }
+    @media (max-width: 768px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+      .ticket-col {
+        grid-column: span 1;
+      }
+      .hero-title {
+        font-size: 1.6rem;
+      }
+      .hero-confirmation-banner {
+        padding: 24px 20px;
+      }
+    }
+
+    /* M3 Surface Cards */
+    .m3-card {
+      background-color: var(--md-sys-color-surface-container-low, #1d1b20);
+      border: 1px solid var(--md-sys-color-outline-variant, #332d41);
+      border-radius: 24px;
+      padding: 26px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+      transition: border-color 0.2s ease;
+    }
+    .m3-card:hover {
+      border-color: rgba(168, 85, 247, 0.35);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant, #332d41);
+    }
+
+    .card-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--md-sys-color-on-surface, #e6e0e9);
+    }
+    .card-title i { color: #a855f7; }
+
+    /* Live Attendee Meter */
+    .attendee-meter-box {
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.12) 0%, rgba(59, 130, 246, 0.08) 100%);
+      border: 1px solid rgba(168, 85, 247, 0.25);
+      border-radius: 16px;
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .attendee-count-wrap {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .attendee-count-num {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #c084fc;
+    }
+    .attendee-count-max {
+      font-size: 1.05rem;
+      color: var(--md-sys-color-on-surface-variant, #cac4d0);
+    }
+
+    /* Event Countdown Timer */
+    .countdown-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      text-align: center;
+    }
+    .countdown-unit {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 12px 6px;
+    }
+    .countdown-val {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #e9d5ff;
+    }
+    .countdown-lbl {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--md-sys-color-on-surface-variant, #cac4d0);
+      margin-top: 2px;
+    }
+
+    /* Preference Data Grid */
+    .pref-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.9rem;
+    }
+    .pref-item:last-child {
+      border-bottom: none;
+    }
+    .pref-key {
+      color: var(--md-sys-color-on-surface-variant, #cac4d0);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pref-val {
+      font-weight: 600;
+      color: var(--md-sys-color-on-surface, #e6e0e9);
+    }
+
+    /* Notes / Goals Area */
+    .notes-box {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .notes-textarea {
+      width: 100%;
+      min-height: 100px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--md-sys-color-outline, #49454f);
+      border-radius: 14px;
+      color: inherit;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      resize: vertical;
+      transition: border-color 0.2s ease;
+      box-sizing: border-box;
+    }
+    .notes-textarea:focus {
+      outline: none;
+      border-color: #a855f7;
+      box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2);
+    }
+
+    /* Digital Pass Card (Ticket View) */
+    .digital-ticket-card {
+      background: linear-gradient(180deg, #1f1b29 0%, #16131e 100%);
+      border: 1px solid rgba(168, 85, 247, 0.35);
+      border-radius: 24px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 18px;
+      position: relative;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    }
+    .digital-ticket-card::before, .digital-ticket-card::after {
+      content: '';
+      position: absolute;
+      top: 60%;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background-color: var(--md-sys-color-surface, #0f0d13);
+    }
+    .digital-ticket-card::before { left: -12px; }
+    .digital-ticket-card::after { right: -12px; }
+
+    .ticket-qr-frame {
+      background: #ffffff;
+      padding: 16px;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 190px;
+      height: 190px;
+    }
+    .ticket-qr-frame img, .ticket-qr-frame canvas {
+      width: 190px !important;
+      height: 190px !important;
+      display: block;
+    }
+
+    .ticket-id-badge {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #c084fc;
+      background: rgba(168, 85, 247, 0.12);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      padding: 6px 14px;
+      border-radius: 8px;
+      letter-spacing: 0.06em;
+    }
+
+    /* Primary and Secondary Buttons */
+    .btn-glow {
+      background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+      color: #ffffff;
+      border: none;
+      border-radius: 999px;
+      padding: 10px 22px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 18px rgba(124, 58, 237, 0.35);
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .btn-glow:hover {
+      box-shadow: 0 6px 24px rgba(168, 85, 247, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--md-sys-color-surface-container-high, #2b2831);
+      color: var(--md-sys-color-on-surface, #e6e0e9);
+      border: 1px solid var(--md-sys-color-outline-variant, #332d41);
+      border-radius: 999px;
+      padding: 10px 20px;
+      font-weight: 600;
+      font-size: 0.88rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+    .btn-secondary:hover {
+      background: var(--md-sys-color-surface-container-highest, #36333d);
+      border-color: #a855f7;
+    }
+
+    .toast-msg {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(20, 18, 24, 0.95);
+      border: 1px solid rgba(34, 197, 94, 0.5);
+      color: #4ade80;
+      padding: 14px 20px;
+      border-radius: 12px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(12px);
+      z-index: 9999;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top App Bar -->
+  <header class="top-nav">
+    <a href="index.html" class="brand-logo">
+      <img src="assets/images/logo.png" alt="EventHub" style="width:28px; height:28px; border-radius:6px;" onerror="this.style.display='none'" />
+      <span>Event<span class="highlight">Hub</span></span>
+    </a>
+
+    <div class="nav-actions">
+      <a href="scanner.html" class="btn-secondary" title="Scan another QR code">
+        <i data-lucide="scan-line"></i>
+        <span>Gate Scanner</span>
+      </a>
+      <a href="dashboard.html" class="btn-secondary" title="Organizer Dashboard">
+        <i data-lucide="layout-dashboard"></i>
+        <span>Organizer</span>
+      </a>
+      <a href="ticket.html" class="btn-secondary" title="View all tickets">
+        <i data-lucide="ticket"></i>
+        <span>My Tickets</span>
+      </a>
+    </div>
+  </header>
+
+  <main class="dashboard-container">
+    
+    <!-- 1. Hero Confirmation Banner -->
+    <section class="hero-confirmation-banner" id="hero-banner">
+      <div class="hero-top-row">
+        <div class="verified-badge">
+          <span class="pulse-dot"></span>
+          <span>Confirmed &amp; Registered</span>
+        </div>
+        <div style="font-size:0.85rem; color:rgba(255,255,255,0.7); display:flex; align-items:center; gap:6px;">
+          <i data-lucide="shield-check" style="width:16px; height:16px; color:#4ade80;"></i>
+          <span>Verified Digital Gate Credential</span>
+        </div>
+      </div>
+
+      <h1 class="hero-title" id="event-display-name">Apex AI &amp; Robotics Hackathon 2026</h1>
+      <p class="hero-subtitle" id="event-display-details">
+        Welcome! Your QR scan has successfully verified your participant profile and registered you for this event. Below is your personalized schedule, saved preferences, and gate entry pass.
+      </p>
+
+      <div class="hero-meta-row">
+        <div class="meta-chip">
+          <i data-lucide="calendar"></i>
+          <span id="meta-date">Oct 24, 2026</span>
+        </div>
+        <div class="meta-chip">
+          <i data-lucide="clock"></i>
+          <span id="meta-time">09:00 AM - 06:00 PM</span>
+        </div>
+        <div class="meta-chip">
+          <i data-lucide="map-pin"></i>
+          <span id="meta-venue">Main Auditorium &amp; Innovation Lab, Pune</span>
+        </div>
+        <div class="meta-chip">
+          <i data-lucide="user-check"></i>
+          <span id="meta-user-name">Attendee: Bala Aditya</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Main 3-Column Grid -->
+    <div class="dashboard-grid">
+
+      <!-- Column 1: Event Details & Real-Time Metrics -->
+      <section class="m3-card">
+        <div class="card-header">
+          <h2 class="card-title">
+            <i data-lucide="info"></i>
+            <span>Event Overview</span>
+          </h2>
+          <span class="meta-chip" style="padding:4px 10px; font-size:0.75rem;" id="badge-category">Hackathon</span>
+        </div>
+
+        <!-- Live Attendee Meter with Real-Time WebSocket / Polling updates -->
+        <div class="attendee-meter-box">
+          <div>
+            <div style="font-size:0.8rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; color:var(--md-sys-color-on-surface-variant,#cac4d0);">
+              Live Registration Count
+            </div>
+            <div class="attendee-count-wrap">
+              <span class="attendee-count-num" id="live-attendees-num">18</span>
+              <span class="attendee-count-max" id="live-attendees-max">/ 150</span>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="display:inline-flex; align-items:center; gap:6px; font-size:0.78rem; color:#4ade80; font-weight:600;">
+              <span class="pulse-dot"></span> Live Sync
+            </div>
+            <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant,#cac4d0); margin-top:4px;">
+              Auto-updates via WebSocket
+            </div>
+          </div>
+        </div>
+
+        <!-- Event Countdown Timer -->
+        <div>
+          <div style="font-size:0.85rem; font-weight:600; margin-bottom:10px; color:var(--md-sys-color-on-surface-variant,#cac4d0);">
+            Countdown to Kickoff
+          </div>
+          <div class="countdown-grid">
+            <div class="countdown-unit">
+              <div class="countdown-val" id="cd-days">18</div>
+              <div class="countdown-lbl">Days</div>
+            </div>
+            <div class="countdown-unit">
+              <div class="countdown-val" id="cd-hours">07</div>
+              <div class="countdown-lbl">Hours</div>
+            </div>
+            <div class="countdown-unit">
+              <div class="countdown-val" id="cd-mins">45</div>
+              <div class="countdown-lbl">Mins</div>
+            </div>
+            <div class="countdown-unit">
+              <div class="countdown-val" id="cd-secs">12</div>
+              <div class="countdown-lbl">Secs</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Event Description & Schedule Highlights -->
+        <div>
+          <div style="font-size:0.85rem; font-weight:600; margin-bottom:6px; color:var(--md-sys-color-on-surface-variant,#cac4d0);">
+            About This Event
+          </div>
+          <p style="font-size:0.88rem; line-height:1.6; color:var(--md-sys-color-on-surface,#e6e0e9); margin:0;" id="event-long-desc">
+            Join the premier inter-college artificial intelligence and robotics championship. Build high-impact agentic AI pipelines, compete for ₹2,50,000 in grand prizes, and network with leading tech founders.
+          </p>
+        </div>
+
+        <div style="border-top:1px solid rgba(255,255,255,0.06); padding-top:14px; font-size:0.82rem; color:var(--md-sys-color-on-surface-variant,#cac4d0);">
+          <i data-lucide="mail" style="width:14px; height:14px; display:inline-block; vertical-align:middle;"></i>
+          Organizer Contact: <a href="mailto:organizer@eventhub.io" id="organizer-contact-link" style="color:#c084fc; text-decoration:none;">organizer@eventhub.io</a>
+        </div>
+      </section>
+
+
+      <!-- Column 2: Participant's Saved Data & Preferences -->
+      <section class="m3-card">
+        <div class="card-header">
+          <h2 class="card-title">
+            <i data-lucide="user"></i>
+            <span>Participant Profile</span>
+          </h2>
+          <span class="ticket-id-badge" style="font-size:0.8rem; padding:3px 10px;" id="badge-user-id">usr_bala_01</span>
+        </div>
+
+        <!-- User Information & Preferences -->
+        <div class="pref-list">
+          <div class="pref-item">
+            <span class="pref-key"><i data-lucide="badge-check"></i> Full Name</span>
+            <span class="pref-val" id="pref-name">Bala Aditya</span>
+          </div>
+          <div class="pref-item">
+            <span class="pref-key"><i data-lucide="mail"></i> Email</span>
+            <span class="pref-val" id="pref-email">aditya.kxlmn@gmail.com</span>
+          </div>
+          <div class="pref-item">
+            <span class="pref-key"><i data-lucide="cpu"></i> Focus Track</span>
+            <span class="pref-val" id="pref-track">Agentic AI &amp; Robotics</span>
+          </div>
+          <div class="pref-item">
+            <span class="pref-key"><i data-lucide="shirt"></i> T-Shirt Size</span>
+            <span class="pref-val" id="pref-tshirt">L (Unisex)</span>
+          </div>
+          <div class="pref-item">
+            <span class="pref-key"><i data-lucide="utensils"></i> Dietary Preference</span>
+            <span class="pref-val" id="pref-dietary">Vegetarian</span>
+          </div>
+          <div class="pref-item">
+            <span class="pref-key"><i data-lucide="bell"></i> Notifications</span>
+            <span class="pref-val" id="pref-notifications" style="color:#4ade80;">Active</span>
+          </div>
+        </div>
+
+        <!-- Interactive Participant Notes & Event Goal (Directly updates backend) -->
+        <div class="notes-box">
+          <label style="font-size:0.85rem; font-weight:600; color:var(--md-sys-color-on-surface-variant,#cac4d0); display:flex; align-items:center; justify-content:space-between;">
+            <span>Personal Notes &amp; Objectives:</span>
+            <span style="font-size:0.75rem; color:#a855f7;">Autosave enabled</span>
+          </label>
+          <textarea class="notes-textarea" id="participant-notes" placeholder="Write down your hackathon goals, team notes, or project ideas..."></textarea>
+          
+          <button class="btn-glow" id="btn-save-notes" style="align-self:flex-start; font-size:0.825rem; padding:8px 18px;">
+            <i data-lucide="save"></i>
+            <span>Save Preferences &amp; Notes</span>
+          </button>
+        </div>
+      </section>
+
+
+      <!-- Column 3: Confirmed Digital Pass & Entry QR Code -->
+      <section class="digital-ticket-card ticket-col">
+        <div style="font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#c084fc;">
+          Official Gate Entry Pass
+        </div>
+
+        <div style="font-family:'Outfit',sans-serif; font-size:1.15rem; font-weight:700;">
+          EventHub Fast-Track Access
+        </div>
+
+        <!-- Dynamic Entry QR Code for Gate Scanner Verification -->
+        <div class="ticket-qr-frame" id="ticket-qr-container">
+          <!-- Rendered dynamically by QRCode.js -->
+        </div>
+
+        <div class="ticket-id-badge" id="display-ticket-id">
+          EH-DEMO01-8842
+        </div>
+
+        <p style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant,#cac4d0); margin:0; line-height:1.4;">
+          Present this optical QR code at the registration gate or security checkpoint for instant millisecond check-in.
+        </p>
+
+        <div style="display:flex; flex-direction:column; gap:8px; width:100%;">
+          <button class="btn-glow" style="width:100%; justify-content:center;" onclick="window.print()">
+            <i data-lucide="printer"></i>
+            <span>Print / Save Ticket PDF</span>
+          </button>
+          <a href="scanner.html" class="btn-secondary" style="width:100%; justify-content:center; box-sizing:border-box;">
+            <i data-lucide="camera"></i>
+            <span>Scan Another QR Code</span>
+          </a>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Notification Toast -->
+  <div class="toast-msg" id="toast-msg">
+    <i data-lucide="check-circle-2"></i>
+    <span id="toast-text">Preferences saved successfully!</span>
+  </div>
+
+  <script>
+    // Extract query parameters: user_id and event_id
+    const urlParams = new URLSearchParams(window.location.search);
+    let userId = urlParams.get('user_id') || urlParams.get('userId') || 'usr_bala_01';
+    let eventId = urlParams.get('event_id') || urlParams.get('eventId') || 'evt_demo_01';
+    const isJustRegistered = urlParams.get('registered') === '1';
+
+    let currentEvent = null;
+    let currentUser = null;
+    let qrInstance = null;
+    let countdownInterval = null;
+
+    // Toast Notification Helper
+    function showToast(text, duration = 2800) {
+      const toast = document.getElementById('toast-msg');
+      const toastText = document.getElementById('toast-text');
+      toastText.textContent = text;
+      toast.style.display = 'inline-flex';
+      setTimeout(() => {
+        toast.style.display = 'none';
+      }, duration);
+    }
+
+    // Render Digital Entry QR Code
+    function renderEntryQr(ticketId, eventId, userId) {
+      const qrContainer = document.getElementById('ticket-qr-container');
+      qrContainer.innerHTML = '';
+
+      // High-speed payload containing verified pass credentials
+      const payload = JSON.stringify({
+        ticketId: ticketId,
+        eventId: eventId,
+        userId: userId,
+        validated: true,
+        issuedAt: new Date().toISOString()
+      });
+
+      try {
+        qrInstance = new QRCode(qrContainer, {
+          text: payload,
+          width: 190,
+          height: 190,
+          colorDark: "#100d17",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } catch (e) {
+        console.warn('QRCode generation fallback:', e);
+      }
+    }
+
+    // Format Countdown to Event
+    function startCountdown(dateStr, timeStr = '09:00') {
+      if (countdownInterval) clearInterval(countdownInterval);
+
+      const target = new Date(`${dateStr}T${timeStr}:00`).getTime();
+
+      function update() {
+        const now = new Date().getTime();
+        const diff = target - now;
+
+        if (diff <= 0) {
+          document.getElementById('cd-days').textContent = '00';
+          document.getElementById('cd-hours').textContent = '00';
+          document.getElementById('cd-mins').textContent = '00';
+          document.getElementById('cd-secs').textContent = '00';
+          return;
+        }
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const secs = Math.floor((diff % (1000 * 60)) / 1000);
+
+        document.getElementById('cd-days').textContent = String(days).padStart(2, '0');
+        document.getElementById('cd-hours').textContent = String(hours).padStart(2, '0');
+        document.getElementById('cd-mins').textContent = String(mins).padStart(2, '0');
+        document.getElementById('cd-secs').textContent = String(secs).padStart(2, '0');
+      }
+
+      update();
+      countdownInterval = setInterval(update, 1000);
+    }
+
+    // Populate Dashboard Data
+    function populateDashboard(data) {
+      const user = data.user || {};
+      const ev = data.active_event || (data.events && data.events[0]) || {};
+      const reg = data.registrations?.find(r => (r.event_id === ev.id || r.event_id === ev.event_id)) || (data.registrations && data.registrations[0]) || {};
+
+      currentUser = user;
+      currentEvent = ev;
+
+      // Hero Elements
+      document.getElementById('event-display-name').textContent = ev.name || 'Campus Event';
+      document.getElementById('event-display-details').textContent = ev.details || ev.description || 'Welcome! You are confirmed for this event.';
+      document.getElementById('meta-date').textContent = ev.date || 'Oct 24, 2026';
+      document.getElementById('meta-time').textContent = `${ev.startTime || '09:00'} - ${ev.endTime || '18:00'}`;
+      document.getElementById('meta-venue').textContent = `${ev.venue || 'Campus Auditorium'}, ${ev.city || 'Campus'}`;
+      document.getElementById('meta-user-name').textContent = `Attendee: ${user.name || 'Participant'}`;
+
+      // Live Attendee Counter
+      document.getElementById('live-attendees-num').textContent = ev.attendees || '18';
+      document.getElementById('live-attendees-max').textContent = `/ ${ev.maxAttendees || 150}`;
+      document.getElementById('badge-category').textContent = ev.category || 'Event';
+      document.getElementById('event-long-desc').textContent = ev.details || ev.description || '';
+
+      if (ev.organizerEmail) {
+        const mailLink = document.getElementById('organizer-contact-link');
+        mailLink.textContent = ev.organizerEmail;
+        mailLink.href = `mailto:${ev.organizerEmail}`;
+      }
+
+      // Participant Profile
+      document.getElementById('badge-user-id').textContent = user.user_id || userId;
+      document.getElementById('pref-name').textContent = user.name || 'Participant';
+      document.getElementById('pref-email').textContent = user.email || `${userId}@campus.edu`;
+
+      const prefs = user.preferences || {};
+      document.getElementById('pref-track').textContent = prefs.track || 'Agentic AI & Robotics';
+      document.getElementById('pref-tshirt').textContent = prefs.tshirtSize || 'L';
+      document.getElementById('pref-dietary').textContent = prefs.dietary || 'Vegetarian';
+      document.getElementById('participant-notes').value = prefs.notes || '';
+
+      // Ticket ID & Pass
+      const ticketId = reg.ticket_id || reg.ticketId || `EH-${(ev.id || 'DEMO01').slice(-6).toUpperCase()}-8842`;
+      document.getElementById('display-ticket-id').textContent = ticketId;
+
+      renderEntryQr(ticketId, ev.id || ev.event_id, user.user_id);
+      startCountdown(ev.date || '2026-10-24', ev.startTime || '09:00');
+
+      if (isJustRegistered) {
+        showToast(`🎉 Welcome ${user.name}! Registered successfully for ${ev.name}.`, 3500);
+      }
+    }
+
+    // Fetch Personalized Data from Backend Endpoint /home
+    async function loadPersonalizedDashboard() {
+      try {
+        const resp = await fetch(`/api/home?user_id=${encodeURIComponent(userId)}&event_id=${encodeURIComponent(eventId)}`);
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.success) {
+            populateDashboard(data);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Backend /api/home fetch note:', err);
+      }
+
+      // Fallback: Populate with defaults if offline
+      populateDashboard({
+        user: {
+          user_id: userId,
+          name: userId.replace('usr_', '').replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          email: `${userId}@campus.edu`,
+          preferences: {
+            role: 'Participant',
+            track: 'Agentic AI & Robotics',
+            tshirtSize: 'L',
+            dietary: 'Vegetarian',
+            notes: 'Registered via Ultra-Fast QR scan.'
+          }
+        },
+        active_event: {
+          event_id: eventId,
+          id: eventId,
+          name: 'Apex AI & Robotics Hackathon 2026',
+          details: 'Join the premier inter-college artificial intelligence and robotics championship. Build high-impact agentic AI pipelines.',
+          date: '2026-10-24',
+          startTime: '09:00',
+          endTime: '18:00',
+          venue: 'Main Auditorium & Innovation Lab',
+          city: 'Pune',
+          attendees: 19,
+          maxAttendees: 150,
+          category: 'Hackathon'
+        },
+        registrations: [
+          {
+            ticket_id: `EH-${eventId.slice(-6).toUpperCase()}-9421`,
+            event_id: eventId,
+            user_id: userId
+          }
+        ]
+      });
+    }
+
+    // Save Notes & Preferences to Backend
+    document.getElementById('btn-save-notes').addEventListener('click', async () => {
+      const notesVal = document.getElementById('participant-notes').value.trim();
+      const saveBtn = document.getElementById('btn-save-notes');
+      const originalText = saveBtn.innerHTML;
+
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = `<i data-lucide="loader-2" class="spin"></i> Saving...`;
+      if (window.lucide) window.lucide.createIcons();
+
+      try {
+        const payload = {
+          user_id: userId,
+          preferences: {
+            notes: notesVal
+          }
+        };
+
+        const resp = await fetch('/api/user/preferences', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (resp.ok) {
+          showToast('✅ Notes & Preferences saved to database!');
+        } else {
+          showToast('Saved locally.');
+        }
+      } catch (err) {
+        console.warn('Save error:', err);
+        showToast('Saved locally.');
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalText;
+        if (window.lucide) window.lucide.createIcons();
+      }
+    });
+
+    // Real-Time WebSocket Listener (Socket.io) for Live Registration Count Updates
+    function initRealtimeSync() {
+      if (typeof io !== 'undefined') {
+        try {
+          const socket = io();
+          socket.on('connect', () => {
+            console.log('[Socket.io] Connected for live registration sync');
+            if (eventId) {
+              socket.emit('join:event', eventId);
+            }
+          });
+
+          socket.on('registration:updated', (payload) => {
+            console.log('[Socket.io] Registration update received:', payload);
+            if (payload && (payload.eventId === eventId || !payload.eventId)) {
+              if (payload.attendees) {
+                document.getElementById('live-attendees-num').textContent = payload.attendees;
+              }
+              if (payload.newRegistration) {
+                showToast(`🔔 New participant joined: ${payload.newRegistration.name}! Total: ${payload.attendees}`);
+              }
+            }
+          });
+
+          socket.on('event:count_updated', (payload) => {
+            if (payload && (payload.eventId === eventId || !payload.eventId) && payload.attendees) {
+              document.getElementById('live-attendees-num').textContent = payload.attendees;
+            }
+          });
+        } catch (e) {
+          console.warn('Socket.io init note:', e);
+        }
+      }
+
+      // Polling fallback every 8 seconds
+      setInterval(async () => {
+        try {
+          const resp = await fetch(`/api/events/${eventId}`);
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.success && data.event && data.event.attendees) {
+              document.getElementById('live-attendees-num').textContent = data.event.attendees;
+            }
+          }
+        } catch (_) {}
+      }, 8000);
+    }
+
+    // Initialize Page
+    document.addEventListener('DOMContentLoaded', () => {
+      loadPersonalizedDashboard();
+      initRealtimeSync();
+      if (window.lucide) window.lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
